@@ -158,7 +158,7 @@ class SideEffectUpdate(BaseModel):
     side_effect_date: Optional[datetime] = None
 
 class SideEffectRead(BaseModel):
-    side_effects_id: int
+    side_effect_id: int
     user_id: str
     medication_id: int
     side_effect_desc: Optional[str] = None
@@ -168,5 +168,5 @@ class SideEffectRead(BaseModel):
         from_orm = True
 
 class SideEffectDelete(BaseModel):
-    side_effects_id: int
+    side_effect_id: int
 
