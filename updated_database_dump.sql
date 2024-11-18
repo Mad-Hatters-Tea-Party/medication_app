@@ -52,7 +52,7 @@ DROP TABLE IF EXISTS `notification`;
 CREATE TABLE `notification` (
   `notification_id` int NOT NULL AUTO_INCREMENT,  -- Added AUTO_INCREMENT
   `user_id` varchar(25) DEFAULT NULL,
-  `notification_type` int DEFAULT NULL COMMENT '1 = refill\n2 = reminder',
+  `notification_type` int NOT NULL COMMENT '1 = refill\n2 = reminder', -- notification_type REQUIRED
   `notification_message` varchar(150) DEFAULT NULL,
   `notification_date` datetime DEFAULT NULL,
   `notifaction_status` int DEFAULT NULL COMMENT '0 = sent\n1 = read',
