@@ -172,7 +172,7 @@ CREATE TABLE `user` (
   `user_phone` varchar(20) DEFAULT NULL COMMENT 'User phone number:\nCountry code + number. Eg. 44 720192837',
   `user_pwd` varchar(45) NOT NULL, -- user_pwd cannot be NULL
   `user_gender` int DEFAULT NULL COMMENT '0 = female\n1 = male',
-  `user_dob` datetime DEFAULT NULL COMMENT 'User date of birth. \nAge can be calculated from date of birth.',
+  `user_dob` date DEFAULT NULL COMMENT 'User date of birth. \nAge can be calculated from date of birth.',
   `user_height` int DEFAULT NULL COMMENT 'Height = 178cm\nIn the app you can ask in Feet & Inches and you can convert to CM to store the value.',
   `user_weight` int DEFAULT NULL COMMENT 'Weight in KM. ',
   -- `user_bmi` decimal(2,0) DEFAULT NULL COMMENT 'BMI formula = weight(km) / height^2',

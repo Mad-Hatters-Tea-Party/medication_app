@@ -4,17 +4,23 @@
 # have to install the pydantic email thing 
 from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from dateutil.relativedelta import relativedelta  # For calculating age
+from pydantic import ValidationError # for testing validation cases 
 
 # ===================== User =====================
 # Helper function to calculate age from date of birth
-def calculate_age(dob: datetime) -> int:
+'''def calculate_age(dob: datetime) -> int:
     # Make sure dob is timezone-aware, if it is not already
     if dob.tzinfo is None:
         dob = dob.replace(tzinfo=timezone.utc)  # Assuming UTC if dob is naive
 
     today = datetime.now(timezone.utc)  # Current UTC time
+    delta = relativedelta(today, dob)  # Get the difference between today and the DOB
+    return delta.years  # Return the age in years'''
+# Helper function to calculate age from date of birth (using date object instead of date time object)
+def calculate_age(dob: date) -> int:
+    today = date.today()  # Get today's date
     delta = relativedelta(today, dob)  # Get the difference between today and the DOB
     return delta.years  # Return the age in years
 
@@ -24,7 +30,7 @@ class UserCreate(BaseModel):
     user_phone: Optional[str] = Field(None, max_length=20)
     user_pwd: str = Field(..., min_length=8, max_length=45)  # Password length check
     user_gender: Optional[int] = Field(None, ge=0, le=1)  # Gender is 0(female) or 1(male)
-    user_dob: Optional[datetime] = None
+    user_dob: Optional[date] = None
     user_height: Optional[int] = Field(None, gt=0)  # Height must be greater than 0
     user_weight: Optional[int] = Field(None, gt=0)  # Weight must be greater than 0
 
@@ -43,7 +49,7 @@ class UserUpdate(BaseModel):
     user_phone: Optional[str] = Field(None, max_length=20)
     user_pwd: Optional[str] = Field(None, min_length=8, max_length=45)  # Password length check
     user_gender: Optional[int] = Field(None, ge=0, le=1)  # Gender is 0(female) or 1(male)
-    user_dob: Optional[datetime] = None
+    user_dob: Optional[date] = None
     user_height: Optional[int] = Field(None, gt=0)  # Height must be greater than 0
     user_weight: Optional[int] = Field(None, gt=0)  # Weight must be greater than 0
 
@@ -52,9 +58,9 @@ class UserUpdate(BaseModel):
         if v:
             age = calculate_age(v)
             if age < 18:
-                raise ValueError('Age must be 18 or older')
+                raise ValueError('User age must be at least 18')
             if age > 120:
-                raise ValueError('Age must be 120 or younger')
+                raise ValueError('User age must be at most 120 ')
         return v
 
 class UserRead(BaseModel):
@@ -62,7 +68,7 @@ class UserRead(BaseModel):
     user_email: Optional[EmailStr] = None
     user_phone: Optional[str] = None
     user_gender: Optional[int] = None
-    user_dob: Optional[datetime] = None
+    user_dob: Optional[date] = None
     user_height: Optional[int] = None
     user_weight: Optional[int] = None
     class Config:
@@ -71,6 +77,24 @@ class UserRead(BaseModel):
 class UserDelete(BaseModel):
     user_id: str
     user_pwd: str
+
+# Test cases for different dates of birth
+test_dates = [
+    date(2005, 10, 10),  # Age should be below 18 (invalid)
+    date(2000, 10, 10),  # Age should be 24 (valid)
+    date(1900, 10, 10),  # Age should be above 120 (invalid)
+    date(1990, 10, 10),  # Age should be 34 (valid)
+    date(2003, 10, 10),  # Age should be 21 (valid)
+]
+
+# Iterate over test cases
+for dob in test_dates:
+    try:
+        # Try to create a UserCreate instance with each date of birth
+        user = UserCreate(user_id="test_user", user_dob=dob, user_pwd="strongpassword123")
+        print(f"User created successfully with DOB: {dob} (Age: {calculate_age(dob)})")
+    except ValidationError as e:
+        print(f"Validation Error for DOB {dob}: {e}")
 
 
 # ===================== Medication =====================
