@@ -51,7 +51,7 @@ class Notification(Base):
     
     notification_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(25), ForeignKey('user.user_id'))
-    notification_type: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='1 = refill, 2 = reminder')
+    notification_type: Mapped[int] = mapped_column(Integer, nullable=False, comment='1 = refill, 2 = reminder')
     notification_message: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     notification_date: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     notification_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='0 = sent, 1 = read')
