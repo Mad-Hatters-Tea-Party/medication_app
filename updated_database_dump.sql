@@ -137,12 +137,12 @@ DROP TABLE IF EXISTS `side_effect`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `side_effect` (
-  `side_effects_id` int NOT NULL AUTO_INCREMENT, -- Added AUTO_INCREMENT
+  `side_effect_id` int NOT NULL AUTO_INCREMENT, -- Added AUTO_INCREMENT
   `user_id` varchar(25) DEFAULT NULL,
   `medication_id` int DEFAULT NULL,
   `side_effect_desc` varchar(255) DEFAULT NULL,
   `side_effect_date` datetime DEFAULT NULL,
-  PRIMARY KEY (`side_effects_id`),
+  PRIMARY KEY (`side_effect_id`),
   KEY `user_id_side_effect_FK_idx` (`user_id`),
   KEY `med_id_side_effect_FK_idx` (`medication_id`),
   CONSTRAINT `med_id_side_effect_FK` FOREIGN KEY (`medication_id`) REFERENCES `medication` (`medication_id`),

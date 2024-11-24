@@ -89,7 +89,7 @@ class PrescriptionDetail(Base):
 class SideEffect(Base):
     __tablename__ = 'side_effect'
     
-    side_effects_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    side_effect_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(25), ForeignKey('user.user_id'))
     medication_id: Mapped[int] = mapped_column(Integer, ForeignKey('medication.medication_id'))
     side_effect_desc: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
