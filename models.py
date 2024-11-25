@@ -2,7 +2,7 @@
 # This is the file for creating the SQL aclchemy schema and tables -- reflects the tables and relationships in the database
 
 from sqlalchemy import (
-    create_engine, Integer, String, DateTime, ForeignKey, Text
+    create_engine, Integer, String, DateTime, ForeignKey, Text, Date
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import Optional, List
@@ -20,7 +20,7 @@ class User(Base):
     user_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, comment='User phone number: Country code + number. Eg. 44 720192837')
     user_pwd: Mapped[str] = mapped_column(String(45), nullable=False)  # Password cannot be null
     user_gender: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='0 = female, 1 = male')
-    user_dob: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True, comment='User date of birth.')
+    user_dob: Mapped[Optional[Date]] = mapped_column(DateTime, nullable=True, comment='User date of birth.')
     user_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='Height in cm.')
     user_weight: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='Weight in kg.')
     # user_bmi: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='BMI formula = weight(kg) / height(m)^2')
@@ -51,7 +51,7 @@ class Notification(Base):
     
     notification_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(25), ForeignKey('user.user_id'))
-    notification_type: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='1 = refill, 2 = reminder')
+    notification_type: Mapped[int] = mapped_column(Integer, nullable=False, comment='1 = refill, 2 = reminder')
     notification_message: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     notification_date: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     notification_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='0 = sent, 1 = read')
