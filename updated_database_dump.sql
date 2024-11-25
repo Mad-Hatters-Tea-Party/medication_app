@@ -52,7 +52,7 @@ DROP TABLE IF EXISTS `notification`;
 CREATE TABLE `notification` (
   `notification_id` int NOT NULL AUTO_INCREMENT,  -- Added AUTO_INCREMENT
   `user_id` varchar(25) DEFAULT NULL,
-  `notification_type` int DEFAULT NULL COMMENT '1 = refill\n2 = reminder',
+  `notification_type` int NOT NULL COMMENT '1 = refill\n2 = reminder', -- notification_type REQUIRED
   `notification_message` varchar(150) DEFAULT NULL,
   `notification_date` datetime DEFAULT NULL,
   `notifaction_status` int DEFAULT NULL COMMENT '0 = sent\n1 = read',
@@ -170,16 +170,18 @@ CREATE TABLE `user` (
   `user_id` varchar(25) NOT NULL,
   `user_email` varchar(50) DEFAULT NULL COMMENT 'This is the email address of the user.',
   `user_phone` varchar(20) DEFAULT NULL COMMENT 'User phone number:\nCountry code + number. Eg. 44 720192837',
-  `user_pwd` varchar(45) NOT NULL, -- user_pwd cannot be NULL
+  `user_pwd` varchar(255) NOT NULL, -- user_pwd cannot be NULL
   `user_gender` int DEFAULT NULL COMMENT '0 = female\n1 = male',
-  `user_dob` datetime DEFAULT NULL COMMENT 'User date of birth. \nAge can be calculated from date of birth.',
+  `user_dob` date DEFAULT NULL COMMENT 'User date of birth. \nAge can be calculated from date of birth.',
   `user_height` int DEFAULT NULL COMMENT 'Height = 178cm\nIn the app you can ask in Feet & Inches and you can convert to CM to store the value.',
   `user_weight` int DEFAULT NULL COMMENT 'Weight in KM. ',
   -- `user_bmi` decimal(2,0) DEFAULT NULL COMMENT 'BMI formula = weight(km) / height^2',
   PRIMARY KEY (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
+ALTER TABLE user
+ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
 --
 -- Dumping data for table `user`
 --
