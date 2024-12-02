@@ -405,7 +405,8 @@ class PrescriptionDetailRead(BaseORMModel):
     presc_qty: Optional[int] = None
     presc_type: Optional[str] = Field(None, max_length=15)  # Max length 15 for type
     presc_frequency: Optional[str] = Field(None, max_length=45)  # Max length 45 for frequency
-     # Use a Pydantic field validator to set medication_name
+    
+
 
 
 class PrescriptionDetailDelete(BaseORMModel):
