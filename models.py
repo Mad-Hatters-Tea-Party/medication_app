@@ -63,6 +63,11 @@ class Notification(Base):
     notification_date: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     notification_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment='0 = sent, 1 = read')
 
+     # Timestamps to track when the user is created or updated
+    created_at: Mapped[DateTime] = mapped_column(DateTime, default=func.now(), comment="Creation timestamp")
+    updated_at: Mapped[DateTime] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), comment="Last update timestamp")
+
+    #relationships 
     user: Mapped[User] = relationship('User', back_populates='notifications')
 
 

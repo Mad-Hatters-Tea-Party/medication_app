@@ -13,17 +13,27 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select  # Import `select` to handle queries properly
+import secret_secrets as sec
 
 # Database connection details
 # this is the local connection using my local SQL server and SQL workbench 
-hostname = "localhost"
-username = "root"
-password = "root!!**"
+hostname = "app-db.clsm00w6ehfa.us-east-1.rds.amazonaws.com"
+# username = "root"
+username = sec.db_user
+password = sec.db_pwd
+# password = "root!!**"
 port = 3306
 database = "app_db"
+key = "/Users/gavolberding/Downloads/Alice.pem" 
+ssl_ca_path = "/Users/gavolberding/Downloads/global-bundle.pem"
 
 # Connection URL for SQLAlchemy (async)
-SQLALCHEMY_DATABASE_URL = f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
+#SQLALCHEMY_DATABASE_URL = f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
+# Connection URL for SQLAlchemy (with SSL enabled)
+SQLALCHEMY_DATABASE_URL = (
+    f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
+    f"?ssl_ca={ssl_ca_path}"
+)
 
 # Create an asynchronous engine instance
 engine = create_async_engine(
@@ -94,9 +104,9 @@ async def close_connections():
 async def main():
     try:
         # Run the functions using asyncio
-        await create_tables()  # Create tables
+        #await create_tables()  # Create tables
         await test_connection()  # Test the connection
-        await get_medication()  # Fetch medication data
+       # await get_medication()  # Fetch medication data
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
