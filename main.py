@@ -1,6 +1,5 @@
 
 from typing import List
-import logging
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import FastAPI, HTTPException, Depends, status, Response
 from fastapi.responses import JSONResponse
@@ -16,8 +15,7 @@ from models import Medication  # SQLAlchemy model for Medication
 from models import Prescription # SQLAlchemy model for Prescription 
 from models import PrescriptionDetail # SQLAlchemy model for PrescriptionDetail 
 from models import SideEffect # SQLAlchemy model for Side Effect
-import models 
-from schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, Token, UserResponse, UserLogin # Pydantic models
+from schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, UserLogin, UserLoginResponse # Pydantic models
 from schemas import SideEffectCreate, SideEffectRead, SideEffectUpdate, SideEffectDelete, SideEffectDeleteResponse
 from schemas import NotificationCreate, NotificationUpdate, NotificationRead, NotificationDelete, NotificationDeleteResponse  # Pydantic schemas
 from schemas import MedicationRead  # Pydantic schema for Medication
@@ -25,16 +23,12 @@ from schemas import PrescriptionCreate, PrescriptionUpdate, PrescriptionRead, Pr
 from schemas import PrescriptionDetailCreate, PrescriptionDetailUpdate, PrescriptionDetailRead, PrescriptionDetailDelete, PrescriptionDetailDeleteResponse# Pydantic schemas for PrescriptionDetail
 from database import get_db  # Async database session
 from passlib.context import CryptContext  # For password hashing and comparison
-from tokens import *
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
 
 
 # Initialize FastAPI app
-#app = FastAPI()
+app = FastAPI()
 
-'''# Initialize password hashing context (bcrypt)
+# Initialize password hashing context (bcrypt)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") 
 
 
@@ -52,43 +46,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     :param hashed_password: The hashed password from the database
     :return: True if passwords match, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)'''
+    return pwd_context.verify(plain_password, hashed_password)
 #======================== User API Calls ===============================================
-@app.post("/token/refresh")
-async def refresh_access_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
-    # Verify the refresh token
-    try:
-        payload = verify_token(refresh_token)
-        user_id = payload.get("sub")
-
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except HTTPException as e:
-        raise e  # Propagate the exception if it's a verification failure
-
-    # Fetch the user from the database using the user_id from the payload
-    result = await db.execute(select(User).filter(User.user_id == user_id))
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Create a new access token
-    access_token = create_access_token(data={"sub": user_id})
-
-    # Return the new access token
-    return {"access_token": access_token, "token_type": "bearer"}
-
 # Create a new user (POST) # register user 
-@app.post("/register", response_model=UserResponse)
+@app.post("/users/", response_model=UserRead)
 async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check if the user_id already exists in the database
     existing_user = await db.execute(select(User).filter(User.user_id == user.user_id))
@@ -127,56 +88,36 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         await db.rollback()  # Rollback in case of an error
         raise HTTPException(status_code=500, detail="Error creating user: " + str(e))
 
-    # Return the user data along with the access token
-    # Now that the user is created, we generate a JWT token
-    access_token = create_access_token(data={"sub": new_user.user_id}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return new_user
 
-    # Return the user data along with the access token
-     # Prepare the UserRead data
-    user_data = UserRead.model_validate(new_user) # Convert from ORM model to Pydantic model
-    
-    # Prepare the response model (UserResponse)
-    response = UserResponse(
-        user=user_data,
-        token_info=Token(access_token=access_token, token_type="bearer")
-    )
+# login api call 
+@app.post("/login", response_model=UserLoginResponse)
+async def login_user(user_login: UserLogin, db: AsyncSession = Depends(get_db)):
+    # Query the user from the database by user_id
+    result = await db.execute(select(User).filter(User.user_id == user_login.user_id))
+    user = result.scalars().first()
 
-    return response
-
-# The login API
-@app.post("/token", response_model=Token)
-async def login_for_access_token(
-    form_data: UserLogin, db: AsyncSession = Depends(get_db)
-):
-    # Authenticate the user by checking user_id and user_pwd
-    user = await authenticate_user(db, form_data.user_id, form_data.user_pwd)
-    
+    # Check if the user exists
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    # Create an access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.user_id}, expires_delta=access_token_expires
-    )
-    
-    # Return the token along with token type (bearer)
-    return {"access_token": access_token, "token_type": "bearer"}
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verify the provided password against the stored hashed password
+    if not verify_password(user_login.user_pwd, user.user_pwd):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    # Return a success message or token (optional, e.g., JWT token)
+    return {"msg": "Login successful", "user_id": user.user_id}
 
 
-# Read current user 
-@app.get("/users/me", response_model=UserResponse)
-async def read_user(current_user: User = Depends(get_current_user), token_info: dict = Depends(get_current_user_and_refresh_token)):
-    access_token = token_info['access_token']
+# Read a user by user_id (GET)
+@app.get("/users/{user_id}", response_model=UserRead)
+async def read_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).filter(User.user_id == user_id))
+    user = result.scalars().first()
 
-    # Return the current user with the token info
-    return UserResponse(
-        user=UserRead.model_validate(current_user),  # Convert the SQLAlchemy user to the Pydantic UserRead model
-        token_info=Token(access_token=access_token, token_type="bearer")
-    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 # Update a user by user_id (PUT)
 @app.put("/users/{user_id}")
@@ -372,7 +313,7 @@ async def delete_notification(notification_id: int, db: AsyncSession = Depends(g
     return {"msg": "Notification deleted successfully", "notification_id": notification_id}
 
 # ================ END of Notification API Calls ======================================================================
-# ======================== Percription API Calls ======================================================================
+# ======================== Perscription API Calls ======================================================================
 @app.post("/prescriptions/", response_model=PrescriptionRead)
 async def create_prescription(prescription: PrescriptionCreate, db: AsyncSession = Depends(get_db)):
     # Create a new Prescription instance
@@ -697,7 +638,6 @@ class DataAccessOperations:
         user = user.scalar_one_or_none()  # Get the user if it exists, or None if not
 
         if not user:
-            logging.error(f"User with user_id {incoming_side_effect.user_id} does not exist.")
             raise HTTPException(
                 status_code=404,
                 detail=f"User with user_id {incoming_side_effect.user_id} not found."
@@ -717,29 +657,111 @@ class DataAccessOperations:
         # Set created_at and updated_at to the current UTC time
         current_time = datetime.now(timezone.utc)
         data_to_insert = SideEffect(**incoming_side_effect.model_dump(), created_at=current_time, updated_at=current_time)
-        return await self.insert_to_db(db, data_to_insert)
 
-    async def insert_to_db(self, db: AsyncSession, data_to_insert: dict):
-        try:
-            
-            db.add(data_to_insert)  # Add data to the DB session
-            await db.commit()  # Commit the transaction
-            await db.refresh(data_to_insert)  # Refresh the instance after committing
-            return DataAccessOperations.DataAccessResult(success=True, result_data=[data_to_insert])
+        # Insert the side effect into the database
+        db.add(data_to_insert)
+        await db.commit()
+        await db.refresh(data_to_insert)  # Refresh to get the inserted data
 
-        except SQLAlchemyError as e:
-            
-            await db.rollback()  # Rollback the transaction on failure
+        # Fetch the medication name by joining the Medication table with the inserted SideEffect
+        query = select(SideEffect, Medication.medication_name).join(
+            Medication, Medication.medication_id == SideEffect.medication_id
+        ).where(SideEffect.side_effects_id == data_to_insert.side_effects_id)
+
+        result = await db.execute(query)
+        side_effect_with_med_name = result.all()
+
+        if not side_effect_with_med_name:
             raise HTTPException(
-                status_code=500,
-                detail="An error occurred while inserting the side effect."
+                status_code=404,
+                detail=f"Side effect with id {data_to_insert.side_effects_id} not found."
             )
+        # Unpack the first (and only) tuple from the result
+        side_effect, medication_name = side_effect_with_med_name[0]
+
+        # Return the response with medication_name included
+        side_effect_with_med_nameresponse = SideEffectRead(
+            side_effects_id=side_effect.side_effects_id,
+            user_id=side_effect.user_id,
+            medication_id=side_effect.medication_id,
+            medication_name=medication_name,  # Include medication_name in the response
+            side_effect_desc=side_effect.side_effect_desc,
+            created_at=side_effect.created_at,
+            updated_at=side_effect.updated_at
+        )
+
+        return DataAccessOperations.DataAccessResult(success=True, result_data=[side_effect_with_med_nameresponse])
+
+
+
 
     async def read_side_effects_for_user(self, db: AsyncSession, user_id: str):
-        return await self.query_db(db, select(SideEffect).where(SideEffect.user_id == user_id))
+        try:
+            # Join the SideEffect table with Medication to fetch medication_name
+            query = select(SideEffect, Medication.medication_name).join(
+            Medication, Medication.medication_id == SideEffect.medication_id
+            ).where(SideEffect.user_id == user_id)
 
-    async def read_side_effects_for_medication(self, db: AsyncSession, medication_id: str):
-        return await self.query_db(db, select(SideEffect).where(SideEffect.medication_id == medication_id))
+            # Execute the query
+            result = await db.execute(query)
+
+            # Collect the results
+            side_effects_with_med_name = []
+            for side_effect, medication_name in result.all():
+                side_effect_data = SideEffectRead(
+                    side_effects_id=side_effect.side_effects_id,
+                    user_id=side_effect.user_id,
+                    medication_id=side_effect.medication_id,
+                    medication_name=medication_name,  # Add medication_name to the response
+                    side_effect_desc=side_effect.side_effect_desc,
+                    created_at=side_effect.created_at,
+                    updated_at=side_effect.updated_at
+                )
+                side_effects_with_med_name.append(side_effect_data)
+
+            return DataAccessOperations.DataAccessResult(success=True, result_data=side_effects_with_med_name)
+
+        except SQLAlchemyError as e:
+            raise HTTPException(
+                status_code=500,
+                detail="An error occurred while querying the database for side effects."
+            )
+
+    async def read_side_effects_for_medication_and_user(self, db: AsyncSession, medication_id: str, user_id: str):
+        # Query side effects for the specified medication and user, including medication name
+        try:
+            # Join SideEffect with Medication to fetch medication_name
+            query = select(SideEffect, Medication.medication_name).join(
+                Medication, Medication.medication_id == SideEffect.medication_id
+            ).where(
+                SideEffect.medication_id == medication_id,
+                SideEffect.user_id == user_id
+            )
+
+            # Execute the query
+            result = await db.execute(query)
+
+            # Collect the results
+            side_effects_with_med_name = []
+            for side_effect, medication_name in result.all():
+                side_effect_data = SideEffectRead(
+                    side_effects_id=side_effect.side_effects_id,
+                    user_id=side_effect.user_id,
+                    medication_id=side_effect.medication_id,
+                    medication_name=medication_name,  # Adding the medication name to the result
+                    side_effect_desc=side_effect.side_effect_desc,
+                    created_at=side_effect.created_at,
+                    updated_at=side_effect.updated_at
+                )
+                side_effects_with_med_name.append(side_effect_data)
+
+            return DataAccessOperations.DataAccessResult(success=True, result_data=side_effects_with_med_name)
+        
+        except SQLAlchemyError as e:
+            raise HTTPException(
+                status_code=500,
+                detail="An error occurred while querying the database for side effects."
+            )
 
     async def delete_side_effect(self, db: AsyncSession, side_effects_id: int):
         return await self.delete_from_db(db, delete(SideEffect).where(SideEffect.side_effects_id == side_effects_id))
@@ -803,7 +825,7 @@ async def read_side_effect_for_user(user_id: str, db: AsyncSession = Depends(get
             detail="Incoming user id is malformed"
         )
 
-    # Query the side effects for the user
+    # Query the side effects for the user, now including the medication name
     result = await data_access_operations.read_side_effects_for_user(db=db, user_id=user_id)
 
     # If the result is not successful, raise an error
@@ -813,26 +835,36 @@ async def read_side_effect_for_user(user_id: str, db: AsyncSession = Depends(get
             detail=f"Unable to retrieve side effects for user: {user_id}"
         )
 
-    # Return the list of side effects
+    # Return the list of side effects, which now includes medication names
     return result.result_data
 
 
-# Read all Side Effects for a Medication
-@app.get("/side_effects/medication/{medication_id}", response_model=List[SideEffectRead])
-async def read_side_effect_for_medication(medication_id: str, db: AsyncSession = Depends(get_db)):
+# Read all Side Effects for a Medication for a specific User with Medication Name
+@app.get("/side_effects/medication/{medication_id}/user/{user_id}", response_model=List[SideEffectRead])
+async def read_side_effect_for_medication_and_user(medication_id: str, user_id: str, db: AsyncSession = Depends(get_db)):
+    # Validate the medication_id and user_id inputs
     if not medication_id or not medication_id.strip():
         raise HTTPException(
             status_code=422,
             detail="Incoming medication id is malformed"
         )
+    if not user_id or not user_id.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Incoming user id is malformed"
+        )
 
-    result = await data_access_operations.read_side_effects_for_medication(db=db, medication_id=medication_id)
+    # Query the side effects for the specified medication and user along with the medication name
+    result = await data_access_operations.read_side_effects_for_medication_and_user(db=db, medication_id=medication_id, user_id=user_id)
+
+    # If the result is not successful, raise an error
     if not result.success:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to retrieve side effect for medication id: {medication_id}"
+            detail=f"Unable to retrieve side effects for medication id: {medication_id} and user id: {user_id}"
         )
 
+    # Return the list of side effects
     return result.result_data
 
 # Delete Side Effect
@@ -878,7 +910,6 @@ async def side_effects_update(side_effects_id: int, update_data: SideEffectUpdat
     except SQLAlchemyError as e:
         # Rollback in case of an error
         await db.rollback()
-        logging.error(f"Error occurred while updating side effect: {e}")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while updating the side effect."

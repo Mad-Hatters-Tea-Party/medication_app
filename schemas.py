@@ -14,15 +14,7 @@ class BaseORMModel(BaseModel):
     class Config:
         from_orm = True
         from_attributes = True
-# ================= Token ================================
-# Token model returned to the client after authentication
-class Token(BaseORMModel):
-    access_token: str
-    token_type: str
 
-# TokenData model to decode JWT payload and retrieve user data
-class TokenData(BaseORMModel):
-    username: Optional[str] = None
 # Function to convert a string to a date object
 def str_to_date(date_str: str, format: str = "%Y-%m-%d") -> date:
     """
@@ -129,6 +121,10 @@ def calculate_bmi(height_in: Optional[int], weight_lb: Optional[int]) -> Optiona
 class UserLogin(BaseORMModel):
     user_id: str = Field(..., max_length=25)
     user_pwd: str = Field(..., min_length=8, max_length=45)  # Password length check
+
+class UserLoginResponse(BaseORMModel):
+    msg: str
+    user_id: str 
 
 class UserCreate(BaseORMModel):
     user_id: str = Field(..., max_length=25)
@@ -299,10 +295,6 @@ class UserDelete(BaseORMModel):
 class UserDeleteResponse(BaseORMModel):
     msg: str
     user_id: str
-
-class UserResponse(BaseORMModel):
-    user: UserRead
-    token_info: Token
     
 # Test cases for different dates of birth
 '''test_dates = [
@@ -502,6 +494,7 @@ class SideEffectRead(BaseORMModel):
     side_effects_id: int
     user_id: str
     medication_id: int
+    medication_name: Optional[str] = None  # Added field for medication name
     side_effect_desc: Optional[str] = Field(None, max_length=255)  # Max length 255 for description
     created_at: datetime
     updated_at: datetime
