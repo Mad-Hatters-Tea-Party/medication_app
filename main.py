@@ -1,5 +1,6 @@
 
 from typing import List
+import logging
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import FastAPI, HTTPException, Depends, status, Response
 from fastapi.responses import JSONResponse
@@ -15,7 +16,8 @@ from models import Medication  # SQLAlchemy model for Medication
 from models import Prescription # SQLAlchemy model for Prescription 
 from models import PrescriptionDetail # SQLAlchemy model for PrescriptionDetail 
 from models import SideEffect # SQLAlchemy model for Side Effect
-from schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, UserLogin, UserLoginResponse # Pydantic models
+import models 
+from schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, Token, UserResponse, UserLogin # Pydantic models
 from schemas import SideEffectCreate, SideEffectRead, SideEffectUpdate, SideEffectDelete, SideEffectDeleteResponse
 from schemas import NotificationCreate, NotificationUpdate, NotificationRead, NotificationDelete, NotificationDeleteResponse  # Pydantic schemas
 from schemas import MedicationRead  # Pydantic schema for Medication
@@ -23,12 +25,16 @@ from schemas import PrescriptionCreate, PrescriptionUpdate, PrescriptionRead, Pr
 from schemas import PrescriptionDetailCreate, PrescriptionDetailUpdate, PrescriptionDetailRead, PrescriptionDetailDelete, PrescriptionDetailDeleteResponse# Pydantic schemas for PrescriptionDetail
 from database import get_db  # Async database session
 from passlib.context import CryptContext  # For password hashing and comparison
+from tokens import *
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 
 
 # Initialize FastAPI app
-app = FastAPI()
+#app = FastAPI()
 
-# Initialize password hashing context (bcrypt)
+'''# Initialize password hashing context (bcrypt)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") 
 
 
@@ -46,10 +52,43 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     :param hashed_password: The hashed password from the database
     :return: True if passwords match, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(plain_password, hashed_password)'''
 #======================== User API Calls ===============================================
+"""@app.post("/token/refresh")
+async def refresh_access_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+    # Verify the refresh token
+    try:
+        payload = verify_token(refresh_token)
+        user_id = payload.get("sub")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except HTTPException as e:
+        raise e  # Propagate the exception if it's a verification failure
+
+    # Fetch the user from the database using the user_id from the payload
+    result = await db.execute(select(User).filter(User.user_id == user_id))
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create a new access token
+    access_token = create_access_token(data={"sub": user_id})
+
+    # Return the new access token
+    return {"access_token": access_token, "token_type": "bearer"}"""
+
 # Create a new user (POST) # register user 
-@app.post("/users/", response_model=UserRead)
+@app.post("/register", response_model=UserResponse)
 async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check if the user_id already exists in the database
     existing_user = await db.execute(select(User).filter(User.user_id == user.user_id))
@@ -88,42 +127,65 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         await db.rollback()  # Rollback in case of an error
         raise HTTPException(status_code=500, detail="Error creating user: " + str(e))
 
-    return new_user
+    # Return the user data along with the access token
+    # Now that the user is created, we generate a JWT token
+    access_token = create_access_token(data={"sub": new_user.user_id}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
 
-# login api call 
-@app.post("/login", response_model=UserLoginResponse)
-async def login_user(user_login: UserLogin, db: AsyncSession = Depends(get_db)):
-    # Query the user from the database by user_id
-    result = await db.execute(select(User).filter(User.user_id == user_login.user_id))
-    user = result.scalars().first()
+    # Return the user data along with the access token
+     # Prepare the UserRead data
+    user_data = UserRead.model_validate(new_user) # Convert from ORM model to Pydantic model
+    
+    # Prepare the response model (UserResponse)
+    response = UserResponse(
+        user=user_data,
+        token_info=Token(access_token=access_token, token_type="bearer")
+    )
 
-    # Check if the user exists
+    return response
+
+# The login API
+@app.post("/token", response_model=Token)
+async def login_for_access_token(
+    form_data: UserLogin, db: AsyncSession = Depends(get_db)
+):
+    # Authenticate the user by checking user_id and user_pwd
+    user = await authenticate_user(db, form_data.user_id, form_data.user_pwd)
+    
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Create an access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.user_id}, expires_delta=access_token_expires
+    )
+    
+    # Return the token along with token type (bearer)
+    return {"access_token": access_token, "token_type": "bearer"}
 
-    # Verify the provided password against the stored hashed password
-    if not verify_password(user_login.user_pwd, user.user_pwd):
-        raise HTTPException(status_code=401, detail="Incorrect password")
 
-    # Return a success message or token (optional, e.g., JWT token)
-    return {"msg": "Login successful", "user_id": user.user_id}
+# Read current user 
+@app.get("/users/me", response_model=UserResponse)
+async def read_user(current_user: User = Depends(get_current_user), token_info: dict = Depends(get_current_user_and_refresh_token)):
+    access_token = token_info['access_token']
 
-
-# Read a user by user_id (GET)
-@app.get("/users/{user_id}", response_model=UserRead)
-async def read_user(user_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).filter(User.user_id == user_id))
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    # Return the current user with the token info
+    return UserResponse(
+        user=UserRead.model_validate(current_user),  # Convert the SQLAlchemy user to the Pydantic UserRead model
+        token_info=Token(access_token=access_token, token_type="bearer")
+    )
 
 # Update a user by user_id (PUT)
-@app.put("/users/{user_id}")
+@app.put("/users/me")
 async def update_user(
-    user_id: str, user_update: UserUpdate, db: AsyncSession = Depends(get_db)
-):
+    user_update: UserUpdate, current_user: UserRead = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    ):
+    # The user_id is automatically derived from the current_user (token), no need to pass it in the path
+    user_id = current_user.user_id
+
     # Query the user by user_id
     result = await db.execute(select(User).filter(User.user_id == user_id))
     user = result.scalars().first()
@@ -183,10 +245,18 @@ async def update_user(
     return user  # This will use the UserRead response model for non-password updates
 
 # Delete user by user_id and password (DELETE)
-@app.delete("/users/{user_id}", response_model=UserDeleteResponse)
-async def delete_user(user_id: str, user_delete: UserDelete, db: AsyncSession = Depends(get_db)):
+@app.delete("/users/me", response_model=UserDeleteResponse)
+async def delete_user(
+    user_delete: UserDelete, 
+    current_user: UserRead = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
+    # Ensure the current user exists (this is essentially done by the get_current_user dependency)
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     # Fetch the user from the database using the user_id
-    result = await db.execute(select(User).filter(User.user_id == user_id))
+    result = await db.execute(select(User).filter(User.user_id == current_user.user_id))
     user = result.scalars().first()
 
     if not user:
@@ -205,7 +275,7 @@ async def delete_user(user_id: str, user_delete: UserDelete, db: AsyncSession = 
         raise HTTPException(status_code=500, detail="Error deleting user: " + str(e))
 
     # Return the success message with user_id
-    return UserDeleteResponse(msg="User deleted successfully", user_id=user_id)
+    return UserDeleteResponse(msg="User deleted successfully", user_id=user.user_id)
 #======================== END User API Calls ===============================================
 # ========================== Medication API calls ===============================================
 # Get all medications (GET)
@@ -224,10 +294,14 @@ async def get_medications(db: AsyncSession = Depends(get_db)):
 # =================== Notification API calls ==============================
 # Create a new notification (POST)
 @app.post("/notifications/", response_model=NotificationRead)
-async def create_notification(notification: NotificationCreate, db: AsyncSession = Depends(get_db)):
+async def create_notification(
+    notification: NotificationCreate, 
+    current_user: User = Depends(get_current_user),  # Automatically get the user from the token
+    db: AsyncSession = Depends(get_db)
+):
     # Create a new notification instance with default values (None for optional fields)
     new_notification = Notification(
-        user_id=notification.user_id,
+        user_id=current_user.user_id, # Use the user_id from the current authenticated user
         notification_type=notification.notification_type,  # Can be None
         notification_message=notification.notification_message,  # Can be None
         notification_date=notification.notification_date or datetime.now(timezone.utc),  # Set to current time if not provided
@@ -248,19 +322,26 @@ async def create_notification(notification: NotificationCreate, db: AsyncSession
 
 # Read a notification by notification_id (GET)
 @app.get("/notifications/{notification_id}", response_model=NotificationRead)
-async def read_notification(notification_id: int, db: AsyncSession = Depends(get_db)):
+async def read_notification(notification_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Fetch the notification by ID
     result = await db.execute(select(Notification).filter(Notification.notification_id == notification_id))
     notification = result.scalars().first()
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
+     # Check if the notification belongs to the current user
+    if notification.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this notification"
+        )
     return notification
 
-# Get all notifications for a user id (GET)
-@app.get("/notifications/user/{user_id}", response_model=List[NotificationRead])
-async def get_user_notifications(user_id: str, db: AsyncSession = Depends(get_db)):
-    # Query the database to get notifications by user_id
-    result = await db.execute(select(Notification).filter(Notification.user_id == user_id))
+# Get all notifications for the current user (GET)
+@app.get("/notifications", response_model=List[NotificationRead])
+async def get_user_notifications(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Query the database to get notifications by current user's user_id
+    result = await db.execute(select(Notification).filter(Notification.user_id == current_user.user_id))
     notifications = result.scalars().all()
 
     if not notifications:
@@ -270,13 +351,20 @@ async def get_user_notifications(user_id: str, db: AsyncSession = Depends(get_db
 
 # Update a notification by notification_id (PUT)
 @app.put("/notifications/{notification_id}", response_model=NotificationRead)
-async def update_notification(notification_id: int, notification_update: NotificationUpdate, db: AsyncSession = Depends(get_db)):
+async def update_notification(notification_id: int, notification_update: NotificationUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Query the notification by notification_id
     result = await db.execute(select(Notification).filter(Notification.notification_id == notification_id))
     notification = result.scalars().first()
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
+    
+    # Check if the notification belongs to the current user
+    if notification.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to update this notification"
+        )
      # Update the notification fields using model_dump()
     for field, value in notification_update.model_dump(exclude_unset=True).items():
         setattr(notification, field, value)
@@ -294,14 +382,19 @@ async def update_notification(notification_id: int, notification_update: Notific
     return notification
 
 # Delete notification by notification_id (DELETE)
-@app.delete("/notifications/{notification_id}", response_model=NotificationDeleteResponse)
-async def delete_notification(notification_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_notification(notification_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Query the notification by notification_id
     result = await db.execute(select(Notification).filter(Notification.notification_id == notification_id))
     notification = result.scalars().first()
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
+     # Check if the notification belongs to the current user
+    if notification.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to delete this notification"
+        )
 
     try:
         await db.delete(notification)  # Delete the notification instance
@@ -313,12 +406,12 @@ async def delete_notification(notification_id: int, db: AsyncSession = Depends(g
     return {"msg": "Notification deleted successfully", "notification_id": notification_id}
 
 # ================ END of Notification API Calls ======================================================================
-# ======================== Perscription API Calls ======================================================================
+# ======================== Percription API Calls ======================================================================
 @app.post("/prescriptions/", response_model=PrescriptionRead)
-async def create_prescription(prescription: PrescriptionCreate, db: AsyncSession = Depends(get_db)):
+async def create_prescription(prescription: PrescriptionCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Create a new Prescription instance
     new_prescription = Prescription(
-        user_id=prescription.user_id,
+        user_id=current_user.user_id,
         prescription_date_start=prescription.prescription_date_start,
         prescription_date_end=prescription.prescription_date_end,
         prescription_status=prescription.prescription_status,
@@ -336,7 +429,7 @@ async def create_prescription(prescription: PrescriptionCreate, db: AsyncSession
 
 # read prescription by prescription id 
 @app.get("/prescriptions/{prescription_id}", response_model=PrescriptionRead)
-async def get_prescription(prescription_id: int, db: AsyncSession = Depends(get_db)):
+async def get_prescription(prescription_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Prescription)
         .options(
@@ -349,6 +442,13 @@ async def get_prescription(prescription_id: int, db: AsyncSession = Depends(get_
 
     if not prescription:
         raise HTTPException(status_code=404, detail="Prescription not found")
+    
+     # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this prescription"
+        )
 
     # Convert the Prescription model to the PrescriptionRead Pydantic model
     prescription_data = []
@@ -373,16 +473,16 @@ async def get_prescription(prescription_id: int, db: AsyncSession = Depends(get_
         user_id=prescription.user_id,
         prescription_details=prescription_data
     )
-# read full list of prescriptions associated with user_id
-@app.get("/prescriptions/user/{user_id}", response_model=List[PrescriptionRead])
-async def get_prescriptions_by_user(user_id: str, db: AsyncSession = Depends(get_db)):
+# read full list of prescriptions associated with user_id (user_id from token)
+@app.get("/prescriptions/", response_model=List[PrescriptionRead])
+async def get_prescriptions_by_user(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Prescription)
         .options(
             selectinload(Prescription.prescription_details)
             .selectinload(PrescriptionDetail.medication)  # Eager load medication
         )
-        .filter(Prescription.user_id == user_id)  # Filter by user_id
+        .filter(Prescription.user_id == current_user.user_id)  # Filter by user_id
     )
     prescriptions = result.scalars().all()  # Get all prescriptions for the user
 
@@ -419,13 +519,21 @@ async def get_prescriptions_by_user(user_id: str, db: AsyncSession = Depends(get
 
 # update precription by prescription_id 
 @app.put("/prescriptions/{prescription_id}", response_model=PrescriptionRead)
-async def update_prescription(prescription_id: int, prescription_update: PrescriptionUpdate, db: AsyncSession = Depends(get_db)):
+async def update_prescription(prescription_id: int, prescription_update: PrescriptionUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Query the prescription by prescription_id
     result = await db.execute(select(Prescription).filter(Prescription.prescription_id == prescription_id))
     prescription = result.scalars().first()
 
     if not prescription:
         raise HTTPException(status_code=404, detail="Prescription not found")
+    
+     # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this prescription"
+        )
+
 
     # Update the prescription fields using the provided data
     for field, value in prescription_update.model_dump(exclude_unset=True).items():
@@ -442,13 +550,18 @@ async def update_prescription(prescription_id: int, prescription_update: Prescri
 
 # delete percription by prescription_id 
 @app.delete("/prescriptions/{prescription_id}", response_model=PrescriptionDeleteResponse)
-async def delete_prescription(prescription_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_prescription(prescription_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Fetch the prescription from the database using the prescription_id
     result = await db.execute(select(Prescription).filter(Prescription.prescription_id == prescription_id))
     prescription = result.scalars().first()
 
     if not prescription:
         raise HTTPException(status_code=404, detail="Prescription not found")
+    
+    
+    # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this prescription")
 
     try:
         await db.delete(prescription)
@@ -468,7 +581,8 @@ async def delete_prescription(prescription_id: int, db: AsyncSession = Depends(g
 async def create_prescription_detail(
     prescription_id: int, 
     detail: PrescriptionDetailCreate, 
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # Check if the prescription exists in the database
     prescription = await db.execute(select(Prescription).filter(Prescription.prescription_id == prescription_id))
@@ -477,6 +591,12 @@ async def create_prescription_detail(
         raise HTTPException(
             status_code=404,
             detail=f"Prescription with id {prescription_id} not found."
+        )
+     # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this prescription"
         )
 
     # Check if the medication exists in the database
@@ -512,16 +632,30 @@ async def create_prescription_detail(
 
 # Get all Prescription Details by Prescription ID 
 @app.get("/prescriptions/{prescription_id}/details/", response_model=List[PrescriptionDetailRead])
-async def get_prescription_details(prescription_id: int, db: AsyncSession = Depends(get_db)):
-    # Query to fetch prescription details along with medication name
+async def get_prescription_details(prescription_id: int, db: AsyncSession = Depends(get_db),  current_user: User = Depends(get_current_user)):
+    # Query to fetch the prescription by prescription_id
     result = await db.execute(
+        select(Prescription)
+        .filter(Prescription.prescription_id == prescription_id)
+    )
+    prescription = result.scalars().first()
+
+    if not prescription:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+
+    # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to view this prescription")
+
+    # Query to fetch prescription details along with medication name
+    newresult = await db.execute(
         select(PrescriptionDetail, Medication.medication_name)  # Select both prescription details and medication name
         .join(Medication, Medication.medication_id == PrescriptionDetail.medication_id)  # Join with Medication model
         .filter(PrescriptionDetail.prescription_id == prescription_id)
     )
     
     # Fetch all results
-    details = result.all()
+    details = newresult.all()
 
     if not details:
         raise HTTPException(status_code=404, detail="Prescription details not found")
@@ -548,7 +682,8 @@ async def update_prescription_detail(
     prescription_id: int,
     medication_id: int,
     detail_update: PrescriptionDetailUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRead = Depends(get_current_user) 
 ):
     # Check if the prescription exists in the database
     prescription = await db.execute(select(Prescription).filter(Prescription.prescription_id == prescription_id))
@@ -558,6 +693,10 @@ async def update_prescription_detail(
             status_code=404,
             detail=f"Prescription with id {prescription_id} not found."
         )
+    
+     # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to update this prescription")
 
     # Check if the medication exists in the database
     medication = await db.execute(select(Medication).filter(Medication.medication_id == medication_id))
@@ -603,7 +742,19 @@ async def update_prescription_detail(
 
 # deletes a prescription detail based on both prescription_id and medication_id
 @app.delete("/prescriptions/{prescription_id}/details/{medication_id}", response_model=PrescriptionDetailDeleteResponse)
-async def delete_prescription_detail(prescription_id: int, medication_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_prescription_detail(prescription_id: int, medication_id: int, db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
+    # Fetch the prescription from the database using prescription_id
+    result = await db.execute(select(Prescription).filter(Prescription.prescription_id == prescription_id))
+    prescription = result.scalars().first()
+
+    #check is prescription exists 
+    if not prescription:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+
+    # Check if the prescription belongs to the current user
+    if prescription.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this prescription")
+
     # Fetch the prescription detail using prescription_id and medication_id
     result = await db.execute(select(PrescriptionDetail).filter(
         PrescriptionDetail.prescription_id == prescription_id,
@@ -632,16 +783,16 @@ class DataAccessOperations:
         # No need for self.db anymore, the db session will be passed explicitly.
         pass
 
-    async def insert_side_effect(self, db: AsyncSession, incoming_side_effect: SideEffectCreate):
+    async def insert_side_effect(self, db: AsyncSession, incoming_side_effect: SideEffectCreate, user_id: str, ):
         # Check if the user exists
-        user = await db.execute(select(User).filter_by(user_id=incoming_side_effect.user_id))
+        """user = await db.execute(select(User).filter_by(user_id=incoming_side_effect.user_id))
         user = user.scalar_one_or_none()  # Get the user if it exists, or None if not
 
         if not user:
             raise HTTPException(
                 status_code=404,
                 detail=f"User with user_id {incoming_side_effect.user_id} not found."
-            )
+            )"""
 
         # Check if the medication exists
         medication = await db.execute(select(Medication).filter_by(medication_id=incoming_side_effect.medication_id))
@@ -656,7 +807,7 @@ class DataAccessOperations:
         # Proceed with insertion if both user and medication exist
         # Set created_at and updated_at to the current UTC time
         current_time = datetime.now(timezone.utc)
-        data_to_insert = SideEffect(**incoming_side_effect.model_dump(), created_at=current_time, updated_at=current_time)
+        data_to_insert = SideEffect(**incoming_side_effect.model_dump(), created_at=current_time, updated_at=current_time, user_id=user_id)
 
         # Insert the side effect into the database
         db.add(data_to_insert)
@@ -804,64 +955,56 @@ data_access_operations = DataAccessOperations()
 
 # Create Side Effect
 @app.post("/side_effects/", response_model=SideEffectRead)
-async def create_side_effect(data_to_insert: SideEffectCreate, db: AsyncSession = Depends(get_db)):
-    result = await data_access_operations.insert_side_effect(db=db, incoming_side_effect=data_to_insert)
+async def create_side_effect(data_to_insert: SideEffectCreate, db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
+   # Ensure the user matches the current user from the token
+    #data_to_insert.user_id = current_user.user_id  # Ensure the current user's ID is used
+
+    result = await data_access_operations.insert_side_effect(db=db, incoming_side_effect=data_to_insert, user_id=current_user.user_id)
 
     if not result.success:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to insert side effect for user: {data_to_insert.user_id}"
+            detail=f"Unable to insert side effect for user: {current_user.user_id}"
         )
 
     return result.result_data[0]
 
-#read all side Effects for user
-@app.get("/side_effects/{user_id}", response_model=List[SideEffectRead])
-async def read_side_effect_for_user(user_id: str, db: AsyncSession = Depends(get_db)):
-    # Validate the user_id input
-    if not user_id or not user_id.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="Incoming user id is malformed"
-        )
+#read all side Effects for current user
+@app.get("/side_effects/", response_model=List[SideEffectRead])
+async def read_side_effect_for_user(db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
 
     # Query the side effects for the user, now including the medication name
-    result = await data_access_operations.read_side_effects_for_user(db=db, user_id=user_id)
+    result = await data_access_operations.read_side_effects_for_user(db=db, user_id=current_user.user_id)
 
     # If the result is not successful, raise an error
     if not result.success:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to retrieve side effects for user: {user_id}"
+            detail=f"Unable to retrieve side effects for user: {current_user.user_id}"
         )
 
     # Return the list of side effects, which now includes medication names
     return result.result_data
 
 
-# Read all Side Effects for a Medication for a specific User with Medication Name
-@app.get("/side_effects/medication/{medication_id}/user/{user_id}", response_model=List[SideEffectRead])
-async def read_side_effect_for_medication_and_user(medication_id: str, user_id: str, db: AsyncSession = Depends(get_db)):
+# Read all Side Effects for a Medication for current User with Medication Name
+@app.get("/side_effects/medication/{medication_id}/user/", response_model=List[SideEffectRead])
+async def read_side_effect_for_medication_and_user(medication_id: str, db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
     # Validate the medication_id and user_id inputs
     if not medication_id or not medication_id.strip():
         raise HTTPException(
             status_code=422,
             detail="Incoming medication id is malformed"
         )
-    if not user_id or not user_id.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="Incoming user id is malformed"
-        )
 
     # Query the side effects for the specified medication and user along with the medication name
-    result = await data_access_operations.read_side_effects_for_medication_and_user(db=db, medication_id=medication_id, user_id=user_id)
+    result = await data_access_operations.read_side_effects_for_medication_and_user(db=db, medication_id=medication_id, user_id=current_user.user_id)
 
     # If the result is not successful, raise an error
     if not result.success:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to retrieve side effects for medication id: {medication_id} and user id: {user_id}"
+            detail=f"Unable to retrieve side effects for medication id: {medication_id} and user id: {current_user.user_id}"
         )
 
     # Return the list of side effects
@@ -870,7 +1013,18 @@ async def read_side_effect_for_medication_and_user(medication_id: str, user_id: 
 # Delete Side Effect
 # Delete Side Effect
 @app.delete("/side_effects/{side_effects_id}", response_model=SideEffectDeleteResponse)
-async def delete_side_effect(side_effects_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_side_effect(side_effects_id: int, db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
+    # Fetch the side effect from the database
+    result = await db.execute(select(SideEffect).filter(SideEffect.side_effects_id == side_effects_id))
+    side_effect = result.scalars().first()
+
+    if not side_effect:
+        raise HTTPException(status_code=404, detail="Side effect not found")
+
+    # Check if the side effect belongs to the current user
+    if side_effect.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this side effect")
+
     result = await data_access_operations.delete_side_effect(db=db, side_effects_id=side_effects_id)
 
     if result.success:
@@ -881,16 +1035,21 @@ async def delete_side_effect(side_effects_id: int, db: AsyncSession = Depends(ge
 
 # Update Side Effect
 @app.put("/side_effects/{side_effects_id}", response_model=SideEffectRead)
-async def side_effects_update(side_effects_id: int, update_data: SideEffectUpdate, db: AsyncSession = Depends(get_db)):
+async def side_effects_update(side_effects_id: int, update_data: SideEffectUpdate, db: AsyncSession = Depends(get_db), current_user: UserRead = Depends(get_current_user)):
     # Fetch the side effect from the database
     side_effect = await db.execute(select(SideEffect).where(SideEffect.side_effects_id == side_effects_id))
     side_effect = side_effect.scalar_one_or_none()
-
+    # check if side effect exists 
     if not side_effect:
         raise HTTPException(
             status_code=404,
             detail=f"Side effect with id {side_effects_id} not found."
         )
+    
+    # Check if the side effect belongs to the current user
+    if side_effect.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to update this side effect")
+
 
     # Update the side effect description if provided
     if update_data.side_effect_desc:
@@ -902,7 +1061,7 @@ async def side_effects_update(side_effects_id: int, update_data: SideEffectUpdat
     try:
         # Commit the changes
         await db.commit()
-        await db.refresh(side_effect)  # Refresh to get updated data from DB
+        await db.refresh(side_effect)  # Refresh to get updated data from database
 
         # Return the updated side effect
         return side_effect  # This will be serialized via the SideEffectRead model
@@ -914,8 +1073,7 @@ async def side_effects_update(side_effects_id: int, update_data: SideEffectUpdat
             status_code=500,
             detail="An error occurred while updating the side effect."
         )
-
-
+    
 
 
 

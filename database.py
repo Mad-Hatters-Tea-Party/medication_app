@@ -18,22 +18,13 @@ import secret_secrets as sec
 # Database connection details
 # this is the local connection using my local SQL server and SQL workbench 
 hostname = "app-db.clsm00w6ehfa.us-east-1.rds.amazonaws.com" 
-# username = "root"
+
 username = sec.db_user
 password = sec.db_pwd
-# password = "root!!**"
+
 port = 3306
 database = "app_db"
-key = "/Users/gavolberding/Downloads/Alice.pem" 
-ssl_ca_path = "/Users/gavolberding/Downloads/global-bundle.pem"
 
-# Connection URL for SQLAlchemy (async)
-#SQLALCHEMY_DATABASE_URL = f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
-# Connection URL for SQLAlchemy (with SSL enabled)
-"""SQLALCHEMY_DATABASE_URL = (
-    f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
-    f"?ssl_ca={ssl_ca_path}"
-)"""
 SQLALCHEMY_DATABASE_URL = (
     f"mysql+aiomysql://{username}:{password}@{hostname}:{port}/{database}"
 )

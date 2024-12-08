@@ -14,7 +14,15 @@ class BaseORMModel(BaseModel):
     class Config:
         from_orm = True
         from_attributes = True
+# ================= Token ================================
+# Token model returned to the client after authentication
+class Token(BaseORMModel):
+    access_token: str
+    token_type: str
 
+# TokenData model to decode JWT payload and retrieve user data
+class TokenData(BaseORMModel):
+    username: Optional[str] = None
 # Function to convert a string to a date object
 def str_to_date(date_str: str, format: str = "%Y-%m-%d") -> date:
     """
@@ -121,10 +129,6 @@ def calculate_bmi(height_in: Optional[int], weight_lb: Optional[int]) -> Optiona
 class UserLogin(BaseORMModel):
     user_id: str = Field(..., max_length=25)
     user_pwd: str = Field(..., min_length=8, max_length=45)  # Password length check
-
-class UserLoginResponse(BaseORMModel):
-    msg: str
-    user_id: str 
 
 class UserCreate(BaseORMModel):
     user_id: str = Field(..., max_length=25)
@@ -295,6 +299,10 @@ class UserDelete(BaseORMModel):
 class UserDeleteResponse(BaseORMModel):
     msg: str
     user_id: str
+
+class UserResponse(BaseORMModel):
+    user: UserRead
+    token_info: Token
     
 # Test cases for different dates of birth
 '''test_dates = [
@@ -328,7 +336,7 @@ class MedicationRead(BaseORMModel):
 # ===================== Notification =====================
 
 class NotificationCreate(BaseORMModel):
-    user_id: str
+   # user_id: str
     notification_type: Optional[int] = Field(None, ge=1, le=2, description="Notification type: 1 for refill, 2 for reminder")
     notification_message: Optional[str] = Field(None, max_length=150)  # Max length 150 for message
     notification_date: Optional[datetime] = None
@@ -375,7 +383,7 @@ class NotificationDeleteResponse(BaseORMModel):
 # ===================== Prescription =====================
 
 class PrescriptionCreate(BaseORMModel):
-    user_id: str
+    #user_id: str
     prescription_date_start: Optional[date] = None
     prescription_date_end: Optional[date] = None
     prescription_status: Optional[int] = Field(None, ge=0, le=1, description="0 = active, 1 = archive")
@@ -481,7 +489,7 @@ class PrescriptionDetailDeleteResponse(BaseORMModel):
 # ===================== SideEffect =====================
 
 class SideEffectCreate(BaseORMModel):
-    user_id: str
+    #user_id: str
     medication_id: int
     side_effect_desc: Optional[str] = Field(None, max_length=255)  # Max length 255 for description
 
@@ -494,7 +502,6 @@ class SideEffectRead(BaseORMModel):
     side_effects_id: int
     user_id: str
     medication_id: int
-    medication_name: Optional[str] = None  # Added field for medication name
     side_effect_desc: Optional[str] = Field(None, max_length=255)  # Max length 255 for description
     created_at: datetime
     updated_at: datetime
