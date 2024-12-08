@@ -18,12 +18,10 @@ import secret_secrets as sec
 # Database connection details
 # this is the local connection using my local SQL server and SQL workbench 
 hostname = "app-db.clsm00w6ehfa.us-east-1.rds.amazonaws.com" 
-# username = "root"
-#username = 'Wonderland'
+
 username = sec.db_user
 password = sec.db_pwd
-#password = 'DownTheRabbitHole'
-# password = "root!!**"
+
 port = 3306
 database = "app_db"
 key = "/Users/gavolberding/Downloads/Alice.pem" 
