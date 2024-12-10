@@ -9,3 +9,5 @@ need secret_secrets.py -- find in files in project group 1
 [Explanation of Tables in the database.docx](https://github.com/user-attachments/files/18081505/Explanation.of.Tables.in.the.database.docx)
 
 # API Calls Explanation 
+
+[API Explanation Breakdown with Security Tokens.docx](https://github.com/user-attachments/files/18081545/API.Explanation.Breakdown.with.Security.Tokens.docx)
