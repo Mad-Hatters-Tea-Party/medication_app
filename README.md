@@ -17,5 +17,6 @@ http://127.0.0.1:8000/redoc (for documentation only)
 [Explanation of Tables in the database.docx](https://github.com/user-attachments/files/18081505/Explanation.of.Tables.in.the.database.docx)
 
 # API Calls Explanation 
+[API.Explanation.Breakdown.with.Security.Tokens.docx](https://github.com/user-attachments/files/18101662/API.Explanation.Breakdown.with.Security.Tokens.docx)
 
-[API Explanation Breakdown with Security Tokens.docx](https://github.com/user-attachments/files/18082465/API.Explanation.Breakdown.with.Security.Tokens.docx)
+
