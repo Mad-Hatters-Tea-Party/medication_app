@@ -5,10 +5,12 @@ need secret_secrets.py -- find in files in project group 1
 
 # How to run 
 can run with uvicorn in virtual environment and test with something like ThunderClient in VScode   -- 
+for this use NO reletive imports. ex import models 
 Alt: in package in virtual environment (I ran it in VScode)  --
 in terminal: fastapi dev main.py    
 open dashboards 
-http://127.0.0.1:8000/docs  (for testing)
+for these use relative import ex. import .models
+http://127.0.0.1:8000/docs  (for documentation)
 http://127.0.0.1:8000/redoc (for documentation only) 
 
 # Database Tables Explanation 
