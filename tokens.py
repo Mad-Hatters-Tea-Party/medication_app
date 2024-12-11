@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from typing import Annotated
-import secret_secrets as sec
-from schemas import UserRead 
+from .secret_secrets import SECRET_KEY as key 
+from .schemas import UserRead 
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,10 +12,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from models import User  # Import your User model here
-from database import get_db
+from .models import User  # Import your User model here
+from .database import get_db
 
-SECRET_KEY = sec.SECRET_KEY
+SECRET_KEY = key 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 60 minutes
 REFRESH_TOKEN_EXPIRE_DAYS = 60     # Expiration time for refresh tokens 60 days 

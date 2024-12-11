@@ -10,22 +10,22 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timezone
-from models import User  # SQLAlchemy model for User
-from models import Notification  # SQLAlchemy model for Notification
-from models import Medication  # SQLAlchemy model for Medication
-from models import Prescription # SQLAlchemy model for Prescription 
-from models import PrescriptionDetail # SQLAlchemy model for PrescriptionDetail 
-from models import SideEffect # SQLAlchemy model for Side Effect
-import models 
-from schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, Token, UserResponse, UserLogin # Pydantic models
-from schemas import SideEffectCreate, SideEffectRead, SideEffectUpdate, SideEffectDelete, SideEffectDeleteResponse
-from schemas import NotificationCreate, NotificationUpdate, NotificationRead, NotificationDelete, NotificationDeleteResponse  # Pydantic schemas
-from schemas import MedicationRead  # Pydantic schema for Medication
-from schemas import PrescriptionCreate, PrescriptionUpdate, PrescriptionRead, PrescriptionDelete, PrescriptionDeleteResponse # Pydantic schemas for Prescription 
-from schemas import PrescriptionDetailCreate, PrescriptionDetailUpdate, PrescriptionDetailRead, PrescriptionDetailDelete, PrescriptionDetailDeleteResponse# Pydantic schemas for PrescriptionDetail
-from database import get_db  # Async database session
+from .models import User  # SQLAlchemy model for User
+from .models import Notification  # SQLAlchemy model for Notification
+from .models import Medication  # SQLAlchemy model for Medication
+from .models import Prescription # SQLAlchemy model for Prescription 
+from .models import PrescriptionDetail # SQLAlchemy model for PrescriptionDetail 
+from .models import SideEffect # SQLAlchemy model for Side Effect
+#import models 
+from .schemas import UserCreate, UserUpdate, UserRead, UserDelete, UserDeleteResponse, PasswordUpdateResponse, Token, UserResponse, UserLogin # Pydantic models
+from .schemas import SideEffectCreate, SideEffectRead, SideEffectUpdate, SideEffectDelete, SideEffectDeleteResponse
+from .schemas import NotificationCreate, NotificationUpdate, NotificationRead, NotificationDelete, NotificationDeleteResponse  # Pydantic schemas
+from .schemas import MedicationRead  # Pydantic schema for Medication
+from .schemas import PrescriptionCreate, PrescriptionUpdate, PrescriptionRead, PrescriptionDelete, PrescriptionDeleteResponse # Pydantic schemas for Prescription 
+from .schemas import PrescriptionDetailCreate, PrescriptionDetailUpdate, PrescriptionDetailRead, PrescriptionDetailDelete, PrescriptionDetailDeleteResponse# Pydantic schemas for PrescriptionDetail
+from .database import get_db  # Async database session
 from passlib.context import CryptContext  # For password hashing and comparison
-from tokens import *
+from .tokens import *
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)

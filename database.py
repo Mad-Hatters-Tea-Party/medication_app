@@ -6,21 +6,21 @@
 # need to instail aiomysql library 
 # need to install greenlet library 
 # instal newest SQLalchemy 
-import models
+from .models import Base
 import asyncio
 #from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select  # Import `select` to handle queries properly
-import secret_secrets as sec
+from .secret_secrets import * 
 
 # Database connection details
 # this is the local connection using my local SQL server and SQL workbench 
 hostname = "app-db.clsm00w6ehfa.us-east-1.rds.amazonaws.com" 
 
-username = sec.db_user
-password = sec.db_pwd
+username = db_user
+password = db_pwd
 
 port = 3306
 database = "app_db"
@@ -58,7 +58,7 @@ async def create_tables():
     try:
         async with engine.begin() as conn:
             # Use run_sync to execute the synchronous `create_all()` method
-            await conn.run_sync(models.Base.metadata.create_all)
+            await conn.run_sync(Base.metadata.create_all)
             print("Tables created successfully!")
     except SQLAlchemyError as e:
         print(f"Error creating tables: {e}")
@@ -76,7 +76,7 @@ async def test_connection():
         print("Error connecting to the database:", e)
 
 # Test the connection (asynchronous) using the `medication` table
-async def get_medication():
+'''async def get_medication():
     try:
         async with AsyncSessionLocal() as session:  # Use the session directly here
             result = await session.execute(select(models.Medication))  
@@ -86,7 +86,7 @@ async def get_medication():
             for med in medications:
                 print(med)  # Print the custom string representation of the Medication object
     except SQLAlchemyError as e:
-        print(f"Error retrieving medications: {e}")
+        print(f"Error retrieving medications: {e}")'''
 
 # have to use this method "close_connections" to avoid the "RuntimeError: Event loop is closed" in Python 3.12 
 async def close_connections():
